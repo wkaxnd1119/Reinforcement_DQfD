@@ -3,7 +3,7 @@ Using Reinforcement Learning (DQfD) to play cartpole(OpenAI Gym)
 ![image](https://user-images.githubusercontent.com/85381860/144034127-ffcaedda-dec0-456f-9151-61ebb41ca2bc.png)
 
 
-# DQfD 설명
+# DQfD 논문 리뷰
 강화 학습은 어려운 의사 결정문제를 해결하는데 좋은 성과를 보였다. 하지만 이
 러한 알고리즘들은 많은 양의 데이터가 필요하고 학습하는 과정에 있어 많은 시
 행착오를 겪기 때문에 학습이 느리다는 단점이 있다. 본 논문에서는 이러한 단점
@@ -56,3 +56,51 @@ DQfD와 PDD DQN의 성능을 비교한 결과, 시작부터 DQfD의 성능이 �
 수 있다. 정확한 시뮬레이션 모델은 없지만, 기존에 전문가가 했던 행동들의 데이
 터들을 기반으로 학습을 시키는 DQfD의 장점을 이용하면 학습을 효율을 증가시
 킬 수 있다.
+
+# DQfD 구현 리뷰 
+환경 및 구현 알고리즘 설명
+1. DQN Network 설정
+DQN 학습 Network를 위해 Fully Connected Layer 를 3개 (Input, Hidden, Output) 로 간단하
+게 설정하였다. Input Layer의 size는 (4 x 32), Hidden Layer의 size는 (32 x 64), Output Layer
+의 size는 (64 x 2)다. 
+2. Loss Function
+Loss Function은 논문과 같이 총 4가지를 구현했다. 
+(1) 1-step DQN: 
+Double DQN 기법으로 100 step마다 Target Network를 update 하였다 
+(2) Supervised Loss :
+Replay Buffer에서 Sampling 한 데이터를 기반으로 Loss를 구한다. Demo Data가 아닐 경우, 
+is_demo 값을 0으로 처리해 최종 값이 0으로 나오게끔 설정했다. 만약 주어진 action이 
+Demonstration의 action과 동일하다면 Margin을 0으로 설정하고 서로 다를 경우 0.8로 설정
+하여 Loss를 계산했다. 
+(3) N-step DQN:
+Demo Data를 N-Step DDQN으로 값을 구한 뒤 Optimize를 하였으나 오히려 성능이 안좋아
+지는 결과가 나와 이번 프로젝트에서는 제외시켰다. (작성한 알고리즘의 문제가 있는 듯 하나 
+발견 하지 못함)
+(4) L2 Regularization 
+Optimization Function에 weight decay 값을 0.0001로 설정하여 L2 정규화를 시켰다. 
+3. 알고리즘
+사전학습을 위해 Demo Data를 불러와 DDQN으로 Target Netwrok를 update 시킨다. Demo 
+Data는 Replay Buffer에 넣어주고 사전학습이 끝나면 e-greedy 방식으로 action을 불러와 
+Q(s,a)를 업데이트 시킨다. Replay Buffer의 크기는 1000개로 제한하였으며, max상태가 되면 
+Demo Data를 제외한 가장 오래된 데이터에 덮어쓴다. 사전 학습이 끝나고 본 학습에 들어가
+면 모든 step의 데이터를 저장하며 is_demo 항목은 0으로 표기하여 나중에 Supervised Loss
+에서 학습되는 상황을 방지한다. 
+4. Epsilon 업데이트
+Epsilon의 초기 값은 기존에 주어진 1로 시작하며 최소 Epsilon 크기는 0.01로 설정했다
+1
+5. Replay Memory 
+매 step별로 action이 있을 경우에만 state, action, reward, next_state, done 을 
+self.replay_memory에 저장해 주었다. self.replay_memory는 size 1,000인 deque 이며 size를 
+넘길 경우 가장 오래된 데이터를 지우는 FIFO 방식으로 설정했다.
+6. Sampling & Training
+Smapling은 Training 단계에서 Replay Memory에 저장되어 있는 정보를 불러온다. Sampling 
+Size는 32로 설정하였으며 Sampling 함수 안에서 각 값들을 List 형태로 불러온 뒤 Sampling 
+Size만큼 합치고 그 합친 값들을 Torch.tensor로 변형켜 DDQN network에 학습시킨다. 
+DQN 모델은 Predict와 Target 두 개로 나누어 Predict 모델만 학습시킨다. 다만 학습이 계속
+되면서 Step이 TARGET_UPDATE_ITER(100 step) 에 도달 시 아래 함수와 같이 Target 모델을 
+Predict 모델로 Update 시킨다. 
+self.q_target.load_state_dict(self.pred_q.state_dict())
+
+### 학습별 Average Reward
+![image](https://user-images.githubusercontent.com/85381860/175032940-e0dbbfad-fda5-4eb0-8d20-a09d703be488.png)
+
